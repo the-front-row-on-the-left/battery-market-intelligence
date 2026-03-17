@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from battery_strategy.postprocess import fallback_comparison
-from battery_strategy.prompts import comparison_prompt
-from battery_strategy.runtime import AgentRuntime
-from battery_strategy.types import ComparisonState, GlobalState
+from battery_strategy.agents.postprocess import fallback_comparison
+from battery_strategy.agents.runtime import AgentRuntime
+from battery_strategy.tools.prompts import comparison_prompt
+from battery_strategy.utils.types import ComparisonState, GlobalState
 
 
 class ComparisonAndSwotAgent:

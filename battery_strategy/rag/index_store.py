@@ -1,20 +1,19 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import faiss
-import numpy as np
 from rank_bm25 import BM25Okapi
 
-from battery_strategy.chunking import TokenApproxChunker
-from battery_strategy.embedding import LocalEmbedder
-from battery_strategy.pdf_loader import extract_pdf_pages
-from battery_strategy.settings import RuntimeConfig
-from battery_strategy.types import ChunkRecord, SourceManifestItem
-from battery_strategy.utils import dump_json, ensure_dir, tokenize_for_bm25
+from battery_strategy.rag.chunking import TokenApproxChunker
+from battery_strategy.rag.embedding import LocalEmbedder
+from battery_strategy.rag.pdf_loader import extract_pdf_pages
+from battery_strategy.utils.common import dump_json, ensure_dir, tokenize_for_bm25
+from battery_strategy.utils.settings import RuntimeConfig
+from battery_strategy.utils.types import ChunkRecord, SourceManifestItem
 
 
 @dataclass(slots=True)
@@ -29,7 +28,6 @@ INDEX_FILE = "dense.faiss"
 CHUNKS_FILE = "chunks.jsonl"
 TOKENIZED_FILE = "bm25_corpus.json"
 META_FILE = "index_meta.json"
-
 
 
 def build_index(
@@ -72,7 +70,6 @@ def build_index(
     return index_dir
 
 
-
 def load_index(index_dir: str | Path) -> IndexBundle:
     resolved_dir = Path(index_dir).resolve()
     dense_index = faiss.read_index(str(resolved_dir / INDEX_FILE))
@@ -86,4 +83,6 @@ def load_index(index_dir: str | Path) -> IndexBundle:
         tokenized_corpus = json.load(fp)
 
     bm25 = BM25Okapi(tokenized_corpus)
-    return IndexBundle(index=dense_index, chunks=chunks, tokenized_corpus=tokenized_corpus, bm25=bm25)
+    return IndexBundle(
+        index=dense_index, chunks=chunks, tokenized_corpus=tokenized_corpus, bm25=bm25
+    )

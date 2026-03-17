@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from battery_strategy.prompts import writer_prompt
-from battery_strategy.runtime import AgentRuntime
-from battery_strategy.types import GlobalState
-from battery_strategy.utils import dump_json
+from battery_strategy.agents.runtime import AgentRuntime
+from battery_strategy.tools.prompts import writer_prompt
+from battery_strategy.utils.common import dump_json
+from battery_strategy.utils.types import GlobalState
 
 
 class WriterAgent:
@@ -36,7 +36,9 @@ class WriterAgent:
 
         final_markdown = self._sections_to_markdown(global_state["draft_sections"])
         (output_dir / "final_report.md").write_text(final_markdown, encoding="utf-8")
-        (output_dir / "references.txt").write_text("\n".join(global_state["references"]), encoding="utf-8")
+        (output_dir / "references.txt").write_text(
+            "\n".join(global_state["references"]), encoding="utf-8"
+        )
         dump_json(global_state, output_dir / "final_state.json")
 
     @staticmethod
@@ -72,8 +74,16 @@ class WriterAgent:
         return {
             "SUMMARY": "LGES와 CATL 모두 EV 둔화에 대응해 포트폴리오 다각화를 추진하고 있으나, LGES는 고객/생산 거점/서비스 확장과 ESS·BaaS 중심으로, CATL은 ESS·재활용·교환형 배터리·나트륨이온 등 생태계 확장 중심으로 접근한다.",
             "1. 시장 배경": global_state.get("market_context", {}).get("summary", ""),
-            "2. LGES 전략": global_state.get("company_results", {}).get("LGES", {}).get("profile", {}).get("portfolio", {}).get("summary", ""),
-            "3. CATL 전략": global_state.get("company_results", {}).get("CATL", {}).get("profile", {}).get("portfolio", {}).get("summary", ""),
+            "2. LGES 전략": global_state.get("company_results", {})
+            .get("LGES", {})
+            .get("profile", {})
+            .get("portfolio", {})
+            .get("summary", ""),
+            "3. CATL 전략": global_state.get("company_results", {})
+            .get("CATL", {})
+            .get("profile", {})
+            .get("portfolio", {})
+            .get("summary", ""),
             "4. 전략 비교": "\n".join(comparison_lines),
             "5. SWOT 분석": str(global_state.get("swot", {})),
             "6. 종합 시사점": "시장 구조 변화 속에서 EV 외 수요처와 생태계 확장이 경쟁 우위를 좌우한다.",

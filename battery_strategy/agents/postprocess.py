@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any, Iterable
 
-from battery_strategy.types import (
+from battery_strategy.utils.types import (
     AXIS_KEYWORDS,
     COMPARISON_AXES,
     Axis,
@@ -14,7 +14,7 @@ from battery_strategy.types import (
     RetrievedChunk,
     SearchHit,
 )
-from battery_strategy.utils import domain_from_url, utc_today
+from battery_strategy.utils.common import domain_from_url, utc_today
 
 
 

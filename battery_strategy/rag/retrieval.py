@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 import numpy as np
 
-from battery_strategy.chunking import chunk_page_range
-from battery_strategy.embedding import LocalEmbedder
-from battery_strategy.index_store import IndexBundle, load_index
-from battery_strategy.types import ChunkRecord, EntityName, RetrievedChunk
-from battery_strategy.utils import tokenize_for_bm25
+from battery_strategy.rag.chunking import chunk_page_range
+from battery_strategy.rag.embedding import LocalEmbedder
+from battery_strategy.rag.index_store import IndexBundle, load_index
+from battery_strategy.utils.common import tokenize_for_bm25
+from battery_strategy.utils.types import ChunkRecord, EntityName, RetrievedChunk
 
 
 class IdentityReranker:
@@ -61,7 +61,7 @@ class HybridRetriever:
         final_top_k: int,
         use_reranker: bool,
         reranker_model: str,
-    ) -> "HybridRetriever":
+    ) -> HybridRetriever:
         bundle = load_index(index_dir)
         reranker = OptionalFlagReranker(reranker_model) if use_reranker else IdentityReranker()
         return cls(
@@ -136,14 +136,20 @@ class HybridRetriever:
         ranked: dict[str, dict] = {}
         for rank, item in enumerate(dense_results, start=1):
             ranked.setdefault(item["chunk_id"], dict(item))
-            ranked[item["chunk_id"]]["score"] = ranked[item["chunk_id"]].get("score", 0.0) + 1.0 / (k + rank)
+            ranked[item["chunk_id"]]["score"] = ranked[item["chunk_id"]].get("score", 0.0) + 1.0 / (
+                k + rank
+            )
         for rank, item in enumerate(sparse_results, start=1):
             ranked.setdefault(item["chunk_id"], dict(item))
-            ranked[item["chunk_id"]]["score"] = ranked[item["chunk_id"]].get("score", 0.0) + 1.0 / (k + rank)
+            ranked[item["chunk_id"]]["score"] = ranked[item["chunk_id"]].get("score", 0.0) + 1.0 / (
+                k + rank
+            )
         return sorted(ranked.values(), key=lambda row: row["score"], reverse=True)
 
     @staticmethod
-    def _to_hit(query: str, label: str, chunk: ChunkRecord, score: float, mode: str) -> RetrievedChunk:
+    def _to_hit(
+        query: str, label: str, chunk: ChunkRecord, score: float, mode: str
+    ) -> RetrievedChunk:
         return {
             "query": query,
             "query_label": label,  # type: ignore[typeddict-item]

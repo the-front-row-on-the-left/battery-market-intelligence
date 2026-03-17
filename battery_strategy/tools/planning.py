@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
-from battery_strategy.types import Axis, CompanyName
-
+from battery_strategy.utils.types import Axis, CompanyName
 
 GENERAL_COMPANY_HINTS: dict[CompanyName, list[str]] = {
     "LGES": [
@@ -39,16 +38,20 @@ AXIS_HINTS: dict[Axis, str] = {
 }
 
 
-
-def build_market_queries(goal: str, target_axis: Axis | None = None, query_hint: str = "") -> list[str]:
+def build_market_queries(
+    goal: str, target_axis: Axis | None = None, query_hint: str = ""
+) -> list[str]:
     extra = f" {query_hint}" if query_hint else ""
-    axis_hint = f" {AXIS_HINTS[target_axis]}" if target_axis else " EV battery market demand, prices, trade, policy"
+    axis_hint = (
+        f" {AXIS_HINTS[target_axis]}"
+        if target_axis
+        else " EV battery market demand, prices, trade, policy"
+    )
     return [
         f"neutral|global EV battery market slowdown 2025 2026{axis_hint}{extra}",
         f"positive|ESS battery demand AI data center storage growth 2025 2026{extra}",
         f"negative|battery overcapacity tariffs utilization slowdown policy risk 2025 2026{extra}",
     ]
-
 
 
 def build_company_queries(
@@ -67,7 +70,6 @@ def build_company_queries(
         f"positive|{entity_name} ESS orders technology expansion partnership 2025 2026 {axis_hint}{extra}",
         f"negative|{entity_name} utilization fixed cost policy risk slowdown tariff 2025 2026 {axis_hint}{extra}",
     ]
-
 
 
 def append_retry_hint(queries: Iterable[str], query_hint: str) -> list[str]:
