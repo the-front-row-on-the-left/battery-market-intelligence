@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from battery_strategy.index_store import build_index, load_index
 from battery_strategy.pipeline import PipelineFactory
-from battery_strategy.settings import load_manifest, load_runtime_config
+from battery_strategy.rag.index_store import build_index, load_index
+from battery_strategy.utils.settings import load_manifest, load_runtime_config
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()

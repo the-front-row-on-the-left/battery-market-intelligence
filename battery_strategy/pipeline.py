@@ -2,14 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from battery_strategy.agents.runtime import AgentRuntime
 from battery_strategy.agents.supervisor import Supervisor
-from battery_strategy.balance import SearchBalanceChecker
-from battery_strategy.llm import BaseLLM, MockLLM, OpenAIResponsesLLM
-from battery_strategy.retrieval import HybridRetriever
-from battery_strategy.runtime import AgentRuntime
-from battery_strategy.settings import Manifest, RuntimeConfig, load_manifest, load_runtime_config
-from battery_strategy.types import GlobalState
-from battery_strategy.web_search import DuckDuckGoSearcher, NoOpSearcher
+from battery_strategy.rag.retrieval import HybridRetriever
+from battery_strategy.tools.balance import SearchBalanceChecker
+from battery_strategy.tools.llm import BaseLLM, OpenAIResponsesLLM
+from battery_strategy.tools.web_search import DuckDuckGoSearcher, NoOpSearcher
+from battery_strategy.utils.settings import (
+    Manifest,
+    RuntimeConfig,
+    load_manifest,
+    load_runtime_config,
+)
+from battery_strategy.utils.types import GlobalState
 
 
 @dataclass(slots=True)
@@ -18,7 +23,7 @@ class PipelineFactory:
     manifest: Manifest
 
     @classmethod
-    def from_config(cls, config_path: str) -> "PipelineFactory":
+    def from_config(cls, config_path: str) -> PipelineFactory:
         config = load_runtime_config(config_path)
         manifest = load_manifest(config.manifest_path)
         return cls(config=config, manifest=manifest)

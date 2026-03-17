@@ -6,15 +6,15 @@ from battery_strategy.agents.bias_audit import BiasAuditAgent
 from battery_strategy.agents.company import CompanyAnalysisAgent
 from battery_strategy.agents.comparison import ComparisonAndSwotAgent
 from battery_strategy.agents.market import MarketAnalysisAgent
-from battery_strategy.agents.writer import WriterAgent
-from battery_strategy.postprocess import (
+from battery_strategy.agents.postprocess import (
     collect_references,
     merge_company_into_global,
     merge_comparison_into_global,
     merge_market_into_global,
 )
-from battery_strategy.runtime import AgentRuntime
-from battery_strategy.types import GlobalState, RetryPlan
+from battery_strategy.agents.runtime import AgentRuntime
+from battery_strategy.agents.writer import WriterAgent
+from battery_strategy.utils.types import GlobalState, RetryPlan
 
 
 @dataclass(slots=True)

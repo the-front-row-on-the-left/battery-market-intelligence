@@ -7,7 +7,7 @@ from typing import Any
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from battery_strategy.utils import safe_json_loads
+from battery_strategy.utils.common import safe_json_loads
 
 load_dotenv()
 

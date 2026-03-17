@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from battery_strategy.planning import build_market_queries
-from battery_strategy.postprocess import build_evidence_bank, fallback_market_context
-from battery_strategy.prompts import market_prompt
-from battery_strategy.runtime import AgentRuntime
-from battery_strategy.types import Axis, MarketState
+from battery_strategy.agents.postprocess import build_evidence_bank, fallback_market_context
+from battery_strategy.agents.runtime import AgentRuntime
+from battery_strategy.tools.planning import build_market_queries
+from battery_strategy.tools.prompts import market_prompt
+from battery_strategy.utils.types import Axis, MarketState
 
 
 class MarketAnalysisAgent:
@@ -23,7 +23,11 @@ class MarketAnalysisAgent:
     ) -> MarketState:
         queries = build_market_queries(goal, target_axis=target_axis, query_hint=query_hint)
         rag_hits = self._retrieve_rag(queries)
-        web_hits = self.runtime.searcher.search_many(queries) if self.runtime.config.web_search.enabled else []
+        web_hits = (
+            self.runtime.searcher.search_many(queries)
+            if self.runtime.config.web_search.enabled
+            else []
+        )
 
         balance = self.runtime.balance_checker.evaluate(queries, web_hits)
         if balance.flags and self.runtime.config.execution.max_subgraph_balance_retries > 0:
@@ -31,7 +35,11 @@ class MarketAnalysisAgent:
             if retry_queries:
                 queries = queries + retry_queries
                 rag_hits = self._retrieve_rag(queries)
-                web_hits = self.runtime.searcher.search_many(queries) if self.runtime.config.web_search.enabled else []
+                web_hits = (
+                    self.runtime.searcher.search_many(queries)
+                    if self.runtime.config.web_search.enabled
+                    else []
+                )
                 balance = self.runtime.balance_checker.evaluate(queries, web_hits)
 
         evidence_bank = build_evidence_bank([*rag_hits, *web_hits])

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
-from battery_strategy.pdf_loader import PageText
-from battery_strategy.types import ChunkRecord, SourceManifestItem
-from battery_strategy.utils import format_page_range
+from battery_strategy.rag.pdf_loader import PageText
+from battery_strategy.utils.common import format_page_range
+from battery_strategy.utils.types import ChunkRecord, SourceManifestItem
 
 
 @dataclass(slots=True)
@@ -17,7 +17,9 @@ class TokenApproxChunker:
     def _count_tokens(text: str) -> int:
         return max(1, len(text.split()))
 
-    def chunk_pages(self, source: SourceManifestItem, pages: Iterable[PageText]) -> list[ChunkRecord]:
+    def chunk_pages(
+        self, source: SourceManifestItem, pages: Iterable[PageText]
+    ) -> list[ChunkRecord]:
         page_list = list(pages)
         chunks: list[ChunkRecord] = []
         buffer_text: list[str] = []
@@ -77,7 +79,6 @@ class TokenApproxChunker:
             "text": "\n\n".join(texts),
             "language": source["language"],
         }
-
 
 
 def chunk_page_range(chunk: ChunkRecord) -> str:

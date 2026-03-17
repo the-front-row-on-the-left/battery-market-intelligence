@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-from battery_strategy.utils import guess_display_page
+from battery_strategy.utils.common import guess_display_page
 
 
 @dataclass(slots=True)
@@ -13,7 +13,6 @@ class PageText:
     page_num: int
     display_page: str
     text: str
-
 
 
 def extract_pdf_pages(path: str | Path) -> list[PageText]:

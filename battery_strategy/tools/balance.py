@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
-from battery_strategy.types import SearchHit
-from battery_strategy.utils import parse_annotated_query
+from battery_strategy.utils.common import parse_annotated_query
+from battery_strategy.utils.types import SearchHit
 
 
 @dataclass(slots=True)
@@ -16,7 +16,9 @@ class SearchBalanceResult:
 
 @dataclass(slots=True)
 class SearchBalanceChecker:
-    def evaluate(self, annotated_queries: Iterable[str], web_hits: list[SearchHit]) -> SearchBalanceResult:
+    def evaluate(
+        self, annotated_queries: Iterable[str], web_hits: list[SearchHit]
+    ) -> SearchBalanceResult:
         labels = [parse_annotated_query(query)[0] for query in annotated_queries]
         label_counter = Counter(labels)
         hit_counter = Counter(hit["query_label"] for hit in web_hits)

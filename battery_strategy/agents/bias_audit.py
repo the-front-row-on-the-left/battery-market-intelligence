@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
-from battery_strategy.prompts import bias_audit_prompt
-from battery_strategy.runtime import AgentRuntime
-from battery_strategy.types import Axis, CompanyName, GlobalState, RetryPlan
+from battery_strategy.agents.runtime import AgentRuntime
+from battery_strategy.tools.prompts import bias_audit_prompt
+from battery_strategy.utils.types import GlobalState, RetryPlan
 
 
 @dataclass(slots=True)
@@ -43,7 +42,11 @@ class BiasAuditAgent:
         flags: list[str] = []
         comparison_axes = global_state["comparison_axes"]
         for company_name, result in global_state.get("company_results", {}).items():
-            missing_axes = [axis for axis in comparison_axes if not result["profile"].get(axis, {}).get("summary")]
+            missing_axes = [
+                axis
+                for axis in comparison_axes
+                if not result["profile"].get(axis, {}).get("summary")
+            ]
             if missing_axes:
                 flags.append(f"missing_axis::{company_name}::{','.join(missing_axes)}")
             if len(result.get("balance_flags", [])) > 0:

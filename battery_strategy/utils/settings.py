@@ -6,7 +6,7 @@ from typing import Any
 
 import yaml
 
-from battery_strategy.types import Axis, SourceManifestItem
+from battery_strategy.utils.types import Axis, SourceManifestItem
 
 
 @dataclass(slots=True)
@@ -96,10 +96,11 @@ def _merge_dict(raw: dict[str, Any], key: str) -> dict[str, Any]:
     return raw.get(key, {}) if isinstance(raw.get(key, {}), dict) else {}
 
 
-
 def load_runtime_config(path: str | Path) -> RuntimeConfig:
     config_path = Path(path).resolve()
-    base_dir = config_path.parent.parent if config_path.parent.name == "configs" else config_path.parent
+    base_dir = (
+        config_path.parent.parent if config_path.parent.name == "configs" else config_path.parent
+    )
     with config_path.open("r", encoding="utf-8") as fp:
         raw = yaml.safe_load(fp) or {}
 
@@ -116,7 +117,6 @@ def load_runtime_config(path: str | Path) -> RuntimeConfig:
     config.output_dir.mkdir(parents=True, exist_ok=True)
     config.index_dir.mkdir(parents=True, exist_ok=True)
     return config
-
 
 
 def load_manifest(path: str | Path) -> Manifest:

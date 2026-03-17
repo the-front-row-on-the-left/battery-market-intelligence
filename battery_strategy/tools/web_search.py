@@ -1,16 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
-from battery_strategy.types import SearchHit, SourceType
-from battery_strategy.utils import domain_from_url, parse_annotated_query, utc_today
-
+from battery_strategy.utils.common import domain_from_url, parse_annotated_query, utc_today
+from battery_strategy.utils.types import SearchHit, SourceType
 
 OFFICIAL_DOMAINS = {"lgensol.com", "catl.com"}
 INDUSTRY_DOMAINS = {"iea.org"}
 ACADEMIC_DOMAINS = {"sciencedirect.com", "springer.com", "nature.com", "ieee.org"}
-
 
 
 def infer_source_type(url: str) -> SourceType:
@@ -60,7 +58,12 @@ class DuckDuckGoSearcher(BaseSearcher):
         for annotated_query in queries:
             label, query = parse_annotated_query(annotated_query)
             with self._ddgs_cls() as ddgs:
-                for item in ddgs.text(query, region=self.region, safesearch="moderate", max_results=self.max_results_per_query):
+                for item in ddgs.text(
+                    query,
+                    region=self.region,
+                    safesearch="moderate",
+                    max_results=self.max_results_per_query,
+                ):
                     url = item.get("href", "")
                     snippet = item.get("body", "")
                     content = snippet

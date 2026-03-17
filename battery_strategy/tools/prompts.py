@@ -3,9 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from battery_strategy.types import Axis
-from battery_strategy.utils import truncate_text
-
+from battery_strategy.utils.common import truncate_text
+from battery_strategy.utils.types import Axis
 
 COMMON_JSON_RULES = """
 Return JSON only.
@@ -14,7 +13,6 @@ Never invent facts, numbers, dates, or citations.
 If evidence is missing, leave the value empty or use an empty list.
 Keep citations exactly as given in the evidence snippets.
 """.strip()
-
 
 
 def _format_hits(hits: list[dict[str, Any]], *, max_chars: int = 14000) -> str:
@@ -29,8 +27,12 @@ def _format_hits(hits: list[dict[str, Any]], *, max_chars: int = 14000) -> str:
     return truncate_text("\n\n".join(rows), max_chars)
 
 
-
-def market_prompt(goal: str, comparison_axes: list[Axis], rag_hits: list[dict[str, Any]], web_hits: list[dict[str, Any]]) -> tuple[str, str]:
+def market_prompt(
+    goal: str,
+    comparison_axes: list[Axis],
+    rag_hits: list[dict[str, Any]],
+    web_hits: list[dict[str, Any]],
+) -> tuple[str, str]:
     instructions = f"""
 You are a battery industry market analyst.
 Summarise the market background that explains why battery companies are diversifying beyond EV.
@@ -70,7 +72,7 @@ Goal:
 {goal}
 
 Comparison axes:
-{', '.join(comparison_axes)}
+{", ".join(comparison_axes)}
 
 RAG evidence:
 {_format_hits(rag_hits, max_chars=10000)}
@@ -82,7 +84,6 @@ Return JSON with this shape:
 {json.dumps(schema, ensure_ascii=False, indent=2)}
 """.strip()
     return instructions, user
-
 
 
 def company_prompt(
@@ -146,7 +147,7 @@ Goal:
 {goal}
 
 Comparison axes:
-{', '.join(comparison_axes)}
+{", ".join(comparison_axes)}
 
 RAG evidence:
 {_format_hits(rag_hits, max_chars=9000)}
@@ -158,7 +159,6 @@ Return JSON with this shape:
 {json.dumps(schema, ensure_ascii=False, indent=2)}
 """.strip()
     return instructions, user
-
 
 
 def comparison_prompt(
@@ -195,7 +195,7 @@ SWOT must strictly separate internal (S/W) and external (O/T) factors.
     }
     user = f"""
 Comparison axes:
-{', '.join(comparison_axes)}
+{", ".join(comparison_axes)}
 
 Market context:
 {truncate_text(json.dumps(market_context, ensure_ascii=False, indent=2), 5000)}
@@ -207,7 +207,6 @@ Return JSON with this shape:
 {json.dumps(schema, ensure_ascii=False, indent=2)}
 """.strip()
     return instructions, user
-
 
 
 def bias_audit_prompt(global_state: dict[str, Any]) -> tuple[str, str]:
@@ -237,7 +236,6 @@ Return JSON with this shape:
 If no retry is needed, set retry_recommendation to null.
 """.strip()
     return instructions, user
-
 
 
 def writer_prompt(
