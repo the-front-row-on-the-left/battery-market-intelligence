@@ -1,0 +1,30 @@
+sources:
+  - id: MARKET
+    group: MARKET
+    title: Global EV Outlook 2025 (clipped)
+    local_path: data/raw/MARKET.pdf
+    language: en
+    source_type: industry_report
+    reference: "IEA(2025). Global EV Outlook 2025. IEA. https://www.iea.org/reports/global-ev-outlook-2025"
+    url: "https://www.iea.org/reports/global-ev-outlook-2025"
+    note: "Clipped pages selected for market background and battery demand/industry trade."
+
+  - id: LGES
+    group: LGES
+    title: 2024 LG ENERGY SOLUTION BUSINESS REPORT (clipped)
+    local_path: data/raw/LGES.pdf
+    language: ko
+    source_type: official_report
+    reference: "LG Energy Solution(2025). 2024 LG ENERGY SOLUTION BUSINESS REPORT. LG Energy Solution. https://www.lgensol.com/assets/file/2024_LGES_Business_Report.pdf"
+    url: "https://www.lgensol.com/assets/file/2024_LGES_Business_Report.pdf"
+    note: "Clipped pages selected for business overview, portfolio, strategy, and financial highlights."
+
+  - id: CATL
+    group: CATL
+    title: CATL 2024 Annual Report (clipped)
+    local_path: data/raw/CATL.pdf
+    language: zh
+    source_type: official_report
+    reference: "CATL(2025). CATL 2024 Annual Report. CATL. https://www.catl.com/uploads/1/file/public/202503/20250317094543_6ig9e0mwng.pdf"
+    url: "https://www.catl.com/uploads/1/file/public/202503/20250317094543_6ig9e0mwng.pdf"
+    note: "Clipped pages selected for management discussion, products, storage, new applications, revenue mix, and R&D."
