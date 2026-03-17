@@ -74,30 +74,46 @@ battery_strategy_multi_agent/
 ├── battery_strategy/
 │   ├── __init__.py
 │   ├── cli.py
-│   ├── settings.py
-│   ├── types.py
-│   ├── utils.py
-│   ├── llm.py
-│   ├── pdf_loader.py
-│   ├── chunking.py
-│   ├── embedding.py
-│   ├── index_store.py
-│   ├── retrieval.py
-│   ├── web_search.py
-│   ├── planning.py
-│   ├── balance.py
-│   ├── prompts.py
 │   ├── pipeline.py
-│   └── agents/
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   ├── runtime.py
+│   │   ├── postprocess.py
+│   │   ├── supervisor.py
+│   │   ├── market.py
+│   │   ├── company.py
+│   │   ├── comparison.py
+│   │   ├── bias_audit.py
+│   │   └── writer.py
+│   ├── rag/
+│   │   ├── __init__.py
+│   │   ├── pdf_loader.py
+│   │   ├── chunking.py
+│   │   ├── embedding.py
+│   │   ├── index_store.py
+│   │   └── retrieval.py
+│   ├── tools/
+│   │   ├── __init__.py
+│   │   ├── llm.py
+│   │   ├── web_search.py
+│   │   ├── balance.py
+│   │   ├── prompts.py
+│   │   └── planning.py
+│   └── utils/
 │       ├── __init__.py
-│       ├── supervisor.py
-│       ├── market.py
-│       ├── company.py
-│       ├── comparison.py
-│       ├── bias_audit.py
-│       └── writer.py
+│       ├── settings.py
+│       ├── types.py
+│       └── common.py
+├── tests/
+│   └── test_smoke.py
 └── outputs/
 ```
+
+### Package Responsibilities
+- `battery_strategy/agents`: Supervisor와 개별 분석 에이전트, 에이전트 공통 runtime/postprocess
+- `battery_strategy/rag`: PDF 적재, 청킹, 임베딩, 인덱스 생성/로딩, 검색
+- `battery_strategy/tools`: LLM, 웹 검색, 검색 편향 점검, 프롬프트, 질의 계획
+- `battery_strategy/utils`: 공통 타입, 설정 로더, 범용 유틸리티
 
 ## Quick Start
 
@@ -118,6 +134,12 @@ OPENAI_MODEL=gpt-4.1-mini
 uv sync
 ```
 
+테스트 도구까지 포함해 개발 환경을 맞추려면 아래를 사용하세요.
+
+```bash
+uv sync --dev
+```
+
 ### 3) RAG 인덱스 생성 (분리 실행)
 ```bash
 uv run battery-strategy embed --config configs/runtime.example.yaml
@@ -134,6 +156,11 @@ uv run battery-strategy run \
 - `outputs/final_report.md`
 - `outputs/final_state.json`
 - `outputs/references.txt`
+
+### 6) 스모크 테스트
+```bash
+uv run pytest -q tests/test_smoke.py
+```
 
 ## Runtime Config 예시
 `configs/runtime.example.yaml`에서 아래 항목을 조정할 수 있습니다.
