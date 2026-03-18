@@ -21,6 +21,8 @@ class LLMSettings:
 class RetrievalSettings:
     embedding_model: str = "BAAI/bge-m3"
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    embedding_batch_size: int = 4
+    embedding_max_seq_length: int = 512
     chunk_size_tokens: int = 900
     chunk_overlap_tokens: int = 120
     dense_top_k: int = 8

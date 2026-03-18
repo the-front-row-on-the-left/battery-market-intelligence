@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from battery_strategy.agents.bias_audit import BiasAuditAgent
 from battery_strategy.agents.company import CompanyAnalysisAgent
@@ -20,6 +20,11 @@ from battery_strategy.utils.types import GlobalState, RetryPlan
 @dataclass(slots=True)
 class Supervisor:
     runtime: AgentRuntime
+    market_agent: MarketAnalysisAgent = field(init=False)
+    company_agent: CompanyAnalysisAgent = field(init=False)
+    comparison_agent: ComparisonAndSwotAgent = field(init=False)
+    bias_audit_agent: BiasAuditAgent = field(init=False)
+    writer_agent: WriterAgent = field(init=False)
 
     def __post_init__(self) -> None:
         self.market_agent = MarketAnalysisAgent(self.runtime)
