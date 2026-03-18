@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from battery_strategy.utils.types import Axis, CompanyName
+from battery_strategy.utils.types import AXIS_VALUES, Axis, CompanyName
+
+BASE_MARKET_REQUIREMENTS = (
+    "2024 2025 2026 official industry report regulator primary source external validation "
+    "EV slowdown diversification ESS battery demand supply chain policy tariff risk"
+)
+
+BASE_COMPANY_REQUIREMENTS = (
+    "2024 2025 2026 official filing official report primary source external validation "
+    "portfolio diversification non-EV ESS supply chain policy risk commercialization"
+)
 
 GENERAL_COMPANY_HINTS: dict[CompanyName, list[str]] = {
     "LGES": [
@@ -26,6 +36,11 @@ GENERAL_COMPANY_HINTS: dict[CompanyName, list[str]] = {
     ],
 }
 
+CATL_CHINESE_HINTS = (
+    "宁德时代 储能 新应用 产能 利用率 在建产能 钠离子 固态电池 回收 换电 "
+    "原材料 成本 关税 政策风险 2024 2025 2026"
+)
+
 
 AXIS_HINTS: dict[Axis, str] = {
     "portfolio": "application diversification, ESS, BBU, robot, ship, aircraft, data center",
@@ -41,16 +56,26 @@ AXIS_HINTS: dict[Axis, str] = {
 def build_market_queries(
     goal: str, target_axis: Axis | None = None, query_hint: str = ""
 ) -> list[str]:
+    resolved_axis = target_axis if target_axis in AXIS_VALUES else None
     extra = f" {query_hint}" if query_hint else ""
     axis_hint = (
-        f" {AXIS_HINTS[target_axis]}"
-        if target_axis
-        else " EV battery market demand, prices, trade, policy"
+        f" {AXIS_HINTS[resolved_axis]}"
+        if resolved_axis
+        else " EV battery market demand prices trade policy overcapacity utilization recycling"
     )
     return [
-        f"neutral|global EV battery market slowdown 2025 2026{axis_hint}{extra}",
-        f"positive|ESS battery demand AI data center storage growth 2025 2026{extra}",
-        f"negative|battery overcapacity tariffs utilization slowdown policy risk 2025 2026{extra}",
+        (
+            f"neutral|{goal} global EV battery market slowdown diversification "
+            f"{BASE_MARKET_REQUIREMENTS}{axis_hint}{extra}"
+        ),
+        (
+            f"positive|{goal} ESS battery demand AI data center storage growth "
+            f"{BASE_MARKET_REQUIREMENTS}{axis_hint}{extra}"
+        ),
+        (
+            f"negative|{goal} battery overcapacity tariffs utilization slowdown policy risk "
+            f"{BASE_MARKET_REQUIREMENTS}{axis_hint}{extra}"
+        ),
     ]
 
 
@@ -63,12 +88,32 @@ def build_company_queries(
 ) -> list[str]:
     entity_name = "LG Energy Solution" if company == "LGES" else "CATL"
     general = ", ".join(GENERAL_COMPANY_HINTS[company])
-    axis_hint = AXIS_HINTS[target_axis] if target_axis else general
+    resolved_axis = target_axis if target_axis in AXIS_VALUES else None
+    axis_hint = AXIS_HINTS[resolved_axis] if resolved_axis else general
     extra = f" {query_hint}" if query_hint else ""
     return [
-        f"neutral|{entity_name} portfolio diversification strategy 2025 2026 {axis_hint}{extra}",
-        f"positive|{entity_name} ESS orders technology expansion partnership 2025 2026 {axis_hint}{extra}",
-        f"negative|{entity_name} utilization fixed cost policy risk slowdown tariff 2025 2026 {axis_hint}{extra}",
+        *[
+            (
+                f"neutral|{goal} {entity_name} portfolio diversification strategy "
+                f"{BASE_COMPANY_REQUIREMENTS} {axis_hint}{extra}"
+            ),
+            (
+                f"positive|{goal} {entity_name} ESS orders technology expansion partnership "
+                f"{BASE_COMPANY_REQUIREMENTS} {axis_hint}{extra}"
+            ),
+            (
+                f"negative|{goal} {entity_name} utilization fixed cost policy risk slowdown tariff "
+                f"{BASE_COMPANY_REQUIREMENTS} {axis_hint}{extra}"
+            ),
+        ],
+        *(
+            [
+                f"neutral|{goal} 宁德时代 多元化战略 储能 新应用 {CATL_CHINESE_HINTS} {axis_hint}{extra}",
+                f"negative|{goal} 宁德时代 风险 原材料 成本 关税 政策风险 {CATL_CHINESE_HINTS} {axis_hint}{extra}",
+            ]
+            if company == "CATL"
+            else []
+        ),
     ]
 
 

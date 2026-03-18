@@ -29,6 +29,18 @@ COMPARISON_AXES: list[Axis] = [
     "strategy_horizon",
 ]
 
+AXIS_VALUES: tuple[Axis, ...] = tuple(COMPARISON_AXES)
+
+AXIS_LABELS: dict[Axis, str] = {
+    "portfolio": "포트폴리오 다각화",
+    "commercialization": "상용화 및 매출화",
+    "manufacturing": "제조 및 생산능력",
+    "technology": "기술 개발",
+    "ecosystem": "생태계 및 파트너십",
+    "risk": "리스크",
+    "strategy_horizon": "전략 시계열",
+}
+
 AXIS_KEYWORDS: dict[Axis, tuple[str, ...]] = {
     "portfolio": ("portfolio", "diversification", "application", "ess", "bbu", "robot", "uav", "uav", "ship", "aircraft", "new application", "신사업", "다각화", "포트폴리오", "储能", "新兴应用"),
     "commercialization": ("orders", "deployment", "revenue", "commercialization", "profit", "sales", "수주", "매출", "양산", "상용화", "收入", "销量", "出货"),

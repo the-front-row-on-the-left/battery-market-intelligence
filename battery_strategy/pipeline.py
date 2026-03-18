@@ -15,6 +15,7 @@ from battery_strategy.utils.settings import (
     load_runtime_config,
 )
 from battery_strategy.utils.types import GlobalState
+from battery_strategy.utils.logging import init_logging
 
 
 @dataclass(slots=True)
@@ -81,7 +82,24 @@ class PipelineFactory:
         }
 
     def run(self, goal: str) -> GlobalState:
+        logger, logging_artifacts = init_logging(self.config.output_dir)
+        logger.info("Pipeline 시작: goal=%s", goal)
+        logger.info("실행 ID=%s", logging_artifacts.run_id)
+        logger.info(
+            "실행 환경: output_dir=%s, index_dir=%s",
+            self.config.output_dir,
+            self.config.index_dir,
+        )
         runtime = self.build_runtime()
+        logger.info("런타임 생성 완료.")
         state = self.create_initial_state(goal)
-        supervisor = Supervisor(runtime)
-        return supervisor.run(state)
+        supervisor = Supervisor(runtime, logger=logger, runtime_factory=self.build_runtime)
+        logger.info("감독자 파이프라인 진입.")
+        try:
+            result = supervisor.run(state)
+            logger.info("파이프라인 완료: status=%s", result.get("status"))
+            logger.info("주요 로그: %s", logging_artifacts.log_file)
+            return result
+        except Exception:
+            logger.exception("파이프라인 실행 실패.")
+            raise

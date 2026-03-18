@@ -29,3 +29,5 @@ outputs/
 
 # pdf
 *.pdf
+
+notebooks/

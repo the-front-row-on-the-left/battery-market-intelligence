@@ -14,6 +14,8 @@ If evidence is missing, leave the value empty or use an empty list.
 Keep citations exactly as given in the evidence snippets.
 Never use placeholder citations such as [1], [2], or [7],[1].
 For source fields, copy the original source title and page/url text from the evidence snippets whenever available.
+Treat official reports, official filings, regulator/intergovernmental publications, and company primary disclosures as stronger evidence than media summaries or commentary.
+Do not present interpretation, recommendation, or speculation as if it were a confirmed fact.
 """.strip()
 
 
@@ -41,6 +43,8 @@ Write primarily in Korean.
 Summarise the market background that explains why battery companies are diversifying beyond EV.
 Prefer concise evidence-based bullets and clear, factual wording.
 Keep company names, product names, official report titles, and exact metric expressions in the original language when useful.
+For every normalized_evidence item, write the `claim` field in natural Korean.
+If the source text is in English or Chinese, translate/paraphrase the claim into Korean while preserving company names, product names, report titles, and exact numbers/units.
 {COMMON_JSON_RULES}
 """.strip()
 
@@ -105,6 +109,8 @@ Analyse the company's current portfolio diversification strategy under the EV sl
 Use the fixed comparison axes exactly as provided.
 For each axis, prefer concrete evidence and quantitative facts over generic descriptions.
 Keep company names, product names, official report titles, and exact metric expressions in the original language when useful.
+For every normalized_evidence item, write the `claim` field in natural Korean.
+If the source text is in English or Chinese, translate/paraphrase the claim into Korean while preserving company names, product names, report titles, and exact numbers/units.
 {COMMON_JSON_RULES}
 """.strip()
 
@@ -181,6 +187,14 @@ Compare LGES and CATL using the fixed axes only. Create a comparison matrix and 
 SWOT must strictly separate internal (S/W) and external (O/T) factors.
 Differences and implications should be decision-useful, not generic.
 Keep company names, product names, official report titles, and exact metric expressions in the original language when useful.
+Write all comparison summaries, differences, implications, and evidence-driven explanatory text in natural Korean.
+If source evidence is in English or Chinese, translate/paraphrase the comparison wording into Korean while preserving company names, product names, official report titles, and exact numbers/units.
+Do not leave Chinese or English evidence snippets untranslated in comparison-facing prose unless the phrase is a proper noun or exact metric expression.
+Only state comparative advantage when the evidence explicitly supports it with concrete facts, numbers, or direct source cues.
+Do not use unsupported evaluative wording such as "우위", "열위", "유리", "불리", "선도", "압도적", or "상호 보완적" unless the provided evidence clearly justifies it.
+If evidence supports only a directional observation, write it as a cautious observation instead of a verdict.
+If one side lacks comparable evidence, say that the comparison is limited rather than filling the gap with inference.
+In "implication", distinguish between evidence-backed implication and analytical caution. Do not write action recommendations unless they are directly grounded in the evidence.
 {COMMON_JSON_RULES}
 """.strip()
 
@@ -225,6 +239,11 @@ def bias_audit_prompt(global_state: dict[str, Any]) -> tuple[str, str]:
 You are a bias audit agent for a battery strategy report.
 Review the current state and detect missing axes, source skew, overly positive evidence, outdated evidence, or unresolved conflicts.
 If retry is needed, recommend ONE retry target only.
+Also detect:
+- evaluative or recommendation-like wording presented without strong evidence
+- key numbers or forecasts supported only by secondary media when stronger primary sources are expected
+- company capability claims that sound stronger than the evidence, such as "stable supply chain", "technology leadership", or "quality competitiveness"
+- comparison conclusions that imply superiority without comparable support on both sides
 {COMMON_JSON_RULES}
 """.strip()
     schema = {
@@ -256,6 +275,7 @@ def writer_prompt(
     comparison_matrix: list[dict[str, Any]],
     swot: dict[str, Any],
     references: list[str],
+    evidence_coverage: dict[str, Any],
 ) -> tuple[str, str]:
     instructions = f"""
 You are a Korean strategy report writer.
@@ -274,6 +294,20 @@ If evidence is thin, say that clearly instead of over-claiming.
 English or Chinese may be mixed only for company names, official source titles, product names, or exact metrics.
 Across the report, make sure major claims in market, company, comparison, and implication sections are supported by source cues or concrete evidence.
 REFERENCE must include only the provided materials.
+Separate confirmed facts from interpretation:
+- Facts: use direct, evidence-grounded wording.
+- Interpretation: use cautious wording such as "시사한다", "해석할 수 있다", "가능성이 있다", or "제한적으로 판단된다".
+- Recommendation: include only if directly supported by the evidence and clearly framed as an analytical suggestion, not a fact.
+Do not turn weak evidence into strong conclusions.
+Do not write unsupported claims such as "stable supply chain", "technology leadership", "quality competitiveness", "clear superiority", or "mutually complementary strategy" unless the evidence explicitly supports them.
+When a point relies mainly on secondary or media evidence, soften the wording and make the evidentiary limitation visible.
+If a number, timeline, or commercialization claim is not clearly supported by high-quality evidence, omit it or qualify it.
+For 6. 종합 시사점, keep the section conservative:
+- Synthesize only what is strongly supported across the evidence.
+- Prefer "difference in emphasis" over "winner/loser" framing.
+- Focus on what seems more likely to matter, not what the companies "must" do, unless that necessity is directly evidenced.
+If evidence coverage is thin for a company, axis, or comparison, say that explicitly and narrow the claim.
+Do not fill evidence gaps with polished but unsupported narrative.
 {COMMON_JSON_RULES}
 """.strip()
     schema = {
@@ -303,6 +337,9 @@ Comparison matrix:
 
 SWOT:
 {truncate_text(json.dumps(swot, ensure_ascii=False, indent=2), 4000)}
+
+Evidence coverage:
+{json.dumps(evidence_coverage, ensure_ascii=False, indent=2)}
 
 References:
 {json.dumps(references, ensure_ascii=False, indent=2)}
