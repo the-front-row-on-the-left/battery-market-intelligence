@@ -43,8 +43,8 @@ def to_evidence_from_rag(company: str, hit: RetrievedChunk) -> EvidenceItem:
         "source_type": hit["source_type"],
         "source_title": hit["source_title"],
         "source_page": hit["page_range"],
-        "citation": f"{hit['source_title']} {hit['page_range']}",
-        "date": utc_today(),
+        "citation": hit["page_range"],
+        "date": "",
         "confidence": 0.5,
     }
 

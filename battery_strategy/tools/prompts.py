@@ -12,6 +12,8 @@ Do not wrap the answer in markdown fences.
 Never invent facts, numbers, dates, or citations.
 If evidence is missing, leave the value empty or use an empty list.
 Keep citations exactly as given in the evidence snippets.
+Never use placeholder citations such as [1], [2], or [7],[1].
+For source fields, copy the original source title and page/url text from the evidence snippets whenever available.
 """.strip()
 
 
@@ -34,8 +36,11 @@ def market_prompt(
     web_hits: list[dict[str, Any]],
 ) -> tuple[str, str]:
     instructions = f"""
-You are a battery industry market analyst.
+You are a battery industry market analyst writing for a Korean strategy report.
+Write primarily in Korean.
 Summarise the market background that explains why battery companies are diversifying beyond EV.
+Prefer concise evidence-based bullets and clear, factual wording.
+Keep company names, product names, official report titles, and exact metric expressions in the original language when useful.
 {COMMON_JSON_RULES}
 """.strip()
 
@@ -94,9 +99,12 @@ def company_prompt(
     web_hits: list[dict[str, Any]],
 ) -> tuple[str, str]:
     instructions = f"""
-You are an evidence-grounded battery strategy analyst.
+You are an evidence-grounded battery strategy analyst writing for a Korean strategy report.
+Write primarily in Korean.
 Analyse the company's current portfolio diversification strategy under the EV slowdown.
 Use the fixed comparison axes exactly as provided.
+For each axis, prefer concrete evidence and quantitative facts over generic descriptions.
+Keep company names, product names, official report titles, and exact metric expressions in the original language when useful.
 {COMMON_JSON_RULES}
 """.strip()
 
@@ -167,9 +175,12 @@ def comparison_prompt(
     comparison_axes: list[Axis],
 ) -> tuple[str, str]:
     instructions = f"""
-You are a battery industry comparison analyst.
+You are a battery industry comparison analyst writing for a Korean strategy report.
+Write primarily in Korean.
 Compare LGES and CATL using the fixed axes only. Create a comparison matrix and SWOT.
 SWOT must strictly separate internal (S/W) and external (O/T) factors.
+Differences and implications should be decision-useful, not generic.
+Keep company names, product names, official report titles, and exact metric expressions in the original language when useful.
 {COMMON_JSON_RULES}
 """.strip()
 
@@ -248,9 +259,20 @@ def writer_prompt(
 ) -> tuple[str, str]:
     instructions = f"""
 You are a Korean strategy report writer.
-Write a concise, evidence-grounded markdown report.
+Write a rich but disciplined markdown report for decision-makers.
+Write primarily in Korean.
 Sections must be ordered exactly as: SUMMARY, 1. 시장 배경, 2. LGES 전략, 3. CATL 전략, 4. 전략 비교, 5. SWOT 분석, 6. 종합 시사점, REFERENCE.
-SUMMARY must be conclusion-oriented and no more than half a page in normal document layout.
+Default to short prose paragraphs.
+Use bullets only where they improve scanability: key points, SWOT items, and concise implications.
+For 4. 전략 비교, include at least one markdown table.
+For 5. SWOT 분석, use bullet lists and keep internal/external factors strictly separated.
+SUMMARY must be written as prose only, not bullets.
+SUMMARY should be conclusion-oriented and consist of 1-2 short paragraphs.
+If needed, weave key points and one caution into those paragraphs naturally.
+The report should be informative and specific, but avoid filler, repetition, and obvious statements.
+If evidence is thin, say that clearly instead of over-claiming.
+English or Chinese may be mixed only for company names, official source titles, product names, or exact metrics.
+Across the report, make sure major claims in market, company, comparison, and implication sections are supported by source cues or concrete evidence.
 REFERENCE must include only the provided materials.
 {COMMON_JSON_RULES}
 """.strip()

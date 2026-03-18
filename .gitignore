@@ -26,3 +26,6 @@ outputs/
 
 # OS/editor noise
 .DS_Store
+
+# pdf
+*.pdf
