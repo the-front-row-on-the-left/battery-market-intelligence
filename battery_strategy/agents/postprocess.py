@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import re
 from typing import Any, Iterable
 
 from battery_strategy.utils.types import (
+    AXIS_LABELS,
     AXIS_KEYWORDS,
     COMPARISON_AXES,
     Axis,
@@ -26,14 +28,25 @@ def infer_axis(text: str) -> Axis:
     return "portfolio"
 
 
+def _looks_non_korean(text: str) -> bool:
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return False
+    has_hangul = re.search(r"[가-힣]", cleaned) is not None
+    has_latin_or_cjk = re.search(r"[A-Za-z\u4e00-\u9fff]", cleaned) is not None
+    return has_latin_or_cjk and not has_hangul
+
+
 
 def to_evidence_from_rag(company: str, hit: RetrievedChunk) -> EvidenceItem:
+    raw_claim = hit["text"][:300].replace("\n", " ")
+    claim = raw_claim if not _looks_non_korean(raw_claim) else "원문 근거 요약은 최종 보고서에서 한국어로 정리함"
     return {
         "company": company,  # type: ignore[typeddict-item]
         "axis": infer_axis(hit["text"]),
         "io_type": "external" if company == "MARKET" else "internal",
         "stance": hit["query_label"],
-        "claim": hit["text"][:300].replace("\n", " "),
+        "claim": claim,
         "metric_name": "",
         "value": None,
         "unit": "",
@@ -51,12 +64,14 @@ def to_evidence_from_rag(company: str, hit: RetrievedChunk) -> EvidenceItem:
 
 
 def to_evidence_from_web(company: str, hit: SearchHit) -> EvidenceItem:
+    raw_claim = (hit.get("content") or hit.get("snippet") or hit["title"])[:300].replace("\n", " ")
+    claim = raw_claim if not _looks_non_korean(raw_claim) else "원문 근거 요약은 최종 보고서에서 한국어로 정리함"
     return {
         "company": company,  # type: ignore[typeddict-item]
         "axis": infer_axis(hit.get("content") or hit.get("snippet") or hit["title"]),
         "io_type": "external",
         "stance": hit["query_label"],
-        "claim": (hit.get("content") or hit.get("snippet") or hit["title"])[:300].replace("\n", " "),
+        "claim": claim,
         "metric_name": "",
         "value": None,
         "unit": "",
@@ -133,6 +148,7 @@ def fallback_comparison(
     for axis in COMPARISON_AXES:
         lges_profile = company_results["LGES"]["profile"].get(axis) if "LGES" in company_results else None
         catl_profile = company_results["CATL"]["profile"].get(axis) if "CATL" in company_results else None
+        axis_label = AXIS_LABELS[axis]
         rows.append(
             {
                 "axis": axis,
@@ -140,8 +156,8 @@ def fallback_comparison(
                 "catl_summary": (catl_profile or {}).get("summary", ""),
                 "lges_metrics": (lges_profile or {}).get("metrics", []),
                 "catl_metrics": (catl_profile or {}).get("metrics", []),
-                "difference": "자동 비교 결과 생성 실패로 요약 비교를 사용합니다.",
-                "implication": "세부 비교는 원문 evidence를 추가 확인하세요.",
+                "difference": f"{axis_label} 관련 근거가 제한적이어서 공개 자료 기준의 요약 비교를 사용합니다.",
+                "implication": f"{axis_label} 축은 추가 근거 확보 전까지 보수적으로 해석할 필요가 있습니다.",
                 "confidence": 0.3,
             }
         )

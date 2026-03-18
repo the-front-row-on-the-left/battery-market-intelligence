@@ -13,7 +13,8 @@ from zoneinfo import ZoneInfo
 from battery_strategy.agents.runtime import AgentRuntime
 from battery_strategy.tools.prompts import writer_prompt
 from battery_strategy.utils.common import dump_json
-from battery_strategy.utils.types import GlobalState
+from battery_strategy.utils.logging import get_logger
+from battery_strategy.utils.types import AXIS_LABELS, COMPARISON_AXES, GlobalState
 
 SECTION_ORDER = [
     "SUMMARY",
@@ -32,6 +33,7 @@ CHROME_BINARY = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chro
 class WriterAgent:
     def __init__(self, runtime: AgentRuntime) -> None:
         self.runtime = runtime
+        self.logger = get_logger("writer")
 
     def run(self, global_state: GlobalState) -> GlobalState:
         instructions, user_prompt = writer_prompt(
@@ -41,20 +43,106 @@ class WriterAgent:
             comparison_matrix=global_state["comparison_matrix"],
             swot=global_state["swot"],
             references=global_state["references"],
+            evidence_coverage=self._evidence_coverage(global_state),
         )
         fallback = {"draft_sections": self._fallback_sections(global_state)}
         parsed = self.runtime.llm.json(instructions, user_prompt, fallback=fallback)
-        global_state["draft_sections"] = parsed.get("draft_sections", fallback["draft_sections"])
+        draft_sections = parsed.get("draft_sections", fallback["draft_sections"])
+        global_state["draft_sections"] = self._apply_evidence_guardrails(global_state, draft_sections)
         self._write_outputs(global_state)
         return global_state
+
+    @staticmethod
+    def _evidence_coverage(global_state: GlobalState) -> dict[str, Any]:
+        company_results = global_state.get("company_results", {})
+        coverage: dict[str, Any] = {
+            "market_evidence_count": len(global_state.get("market_context", {}).get("normalized_evidence", [])),
+            "comparison_row_count": len(global_state.get("comparison_matrix", [])),
+            "companies": {},
+        }
+        for company, result in company_results.items():
+            coverage["companies"][company] = {
+                "normalized_evidence_count": len(result.get("normalized_evidence", [])),
+                "covered_axes": [
+                    axis for axis, profile in result.get("profile", {}).items() if profile.get("summary", "").strip()
+                ],
+            }
+        return coverage
+
+    @classmethod
+    def _apply_evidence_guardrails(
+        cls,
+        global_state: GlobalState,
+        sections: dict[str, str],
+    ) -> dict[str, str]:
+        updated = dict(sections)
+        market_count = len(global_state.get("market_context", {}).get("normalized_evidence", []))
+        lges_count = len(global_state.get("company_results", {}).get("LGES", {}).get("normalized_evidence", []))
+        catl_count = len(global_state.get("company_results", {}).get("CATL", {}).get("normalized_evidence", []))
+        comparison_rows = len(global_state.get("comparison_matrix", []))
+
+        if market_count < 4:
+            updated["1. 시장 배경"] = cls._prepend_notice(
+                updated.get("1. 시장 배경", ""),
+                "시장 배경 관련 근거가 제한적이어서 아래 내용은 확인된 핵심 포인트 위주로 보수적으로 정리했다.",
+            )
+        if lges_count < 5:
+            updated["2. LGES 전략"] = cls._prepend_notice(
+                updated.get("2. LGES 전략", ""),
+                "LGES 관련 확보 근거가 충분하지 않아 공개 자료에서 직접 확인된 내용 중심으로만 정리했다.",
+            )
+        if catl_count < 5:
+            updated["3. CATL 전략"] = cls._prepend_notice(
+                updated.get("3. CATL 전략", ""),
+                "CATL 관련 확보 근거가 충분하지 않아 공개 자료에서 직접 확인된 내용 중심으로만 정리했다.",
+            )
+        if comparison_rows == 0 or min(lges_count, catl_count, market_count) < 4:
+            updated["4. 전략 비교"] = cls._prepend_notice(
+                updated.get("4. 전략 비교", ""),
+                "비교 근거의 밀도가 높지 않아 아래 비교는 공개 자료에서 확인 가능한 차이에 한정해 보수적으로 정리했다.",
+            )
+            updated["6. 종합 시사점"] = cls._prepend_notice(
+                updated.get("6. 종합 시사점", ""),
+                "종합 시사점은 현재 확보된 근거 범위 내에서만 해석했으며, 일부 판단은 추가 검증이 필요하다.",
+            )
+        updated["4. 전략 비교"] = cls._normalize_axis_labels(updated.get("4. 전략 비교", ""))
+        return updated
+
+    @staticmethod
+    def _prepend_notice(text: str, notice: str) -> str:
+        cleaned = (text or "").strip()
+        if not cleaned:
+            return notice
+        if cleaned.startswith(notice):
+            return cleaned
+        return f"{notice}\n\n{cleaned}"
+
+    @staticmethod
+    def _normalize_axis_labels(text: str) -> str:
+        normalized = text or ""
+        for axis, label in AXIS_LABELS.items():
+            normalized = normalized.replace(f"| {axis} |", f"| {label} |")
+            normalized = normalized.replace(f"**{axis}**", f"**{label}**")
+        return normalized
 
     def _write_outputs(self, global_state: GlobalState) -> None:
         output_dir = Path(self.runtime.config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
+        references, reference_index = self._build_reference_catalog(global_state)
+        self.logger.info("참고 근거 정렬 완료: %s건", len(references))
 
         generated_at = self._report_timestamp()
-        final_markdown = self._sections_to_markdown(global_state["draft_sections"], generated_at)
-        final_html = self._build_html_report(global_state, generated_at)
+        final_markdown = self._sections_to_markdown(
+            global_state["draft_sections"],
+            generated_at,
+            references,
+        )
+        final_html = self._build_html_report(
+            global_state,
+            generated_at,
+            references=references,
+            reference_index=reference_index,
+        )
 
         markdown_path = output_dir / "final_report.md"
         html_path = output_dir / "final_report.html"
@@ -63,15 +151,18 @@ class WriterAgent:
 
         markdown_path.write_text(final_markdown, encoding="utf-8")
         html_path.write_text(final_html, encoding="utf-8")
+        self.logger.info("보고서 산출물 작성: md=%s, html=%s", markdown_path, html_path)
         self._write_pdf_from_html(html_path, latest_pdf_path)
         if latest_pdf_path.exists():
             archived_pdf_path.write_bytes(latest_pdf_path.read_bytes())
+            self.logger.info("PDF 생성/아카이브: %s", archived_pdf_path)
 
         (output_dir / "references.txt").write_text(
-            "\n".join(global_state.get("references", [])),
+            "\n".join(references),
             encoding="utf-8",
         )
         dump_json(global_state, output_dir / "final_state.json")
+        self.logger.info("상태 JSON 저장: %s", output_dir / "final_state.json")
 
     @classmethod
     def render_pdf_from_html(cls, html_path: Path, pdf_path: Path) -> Path:
@@ -79,10 +170,18 @@ class WriterAgent:
         cls._write_pdf_from_html(html_path, pdf_path)
         return pdf_path
 
-    @staticmethod
-    def _sections_to_markdown(sections: dict[str, str], generated_at: str) -> str:
+    @classmethod
+    def _sections_to_markdown(
+        cls,
+        sections: dict[str, str],
+        generated_at: str,
+        references: list[str],
+    ) -> str:
         blocks: list[str] = [f"> 생성 시각: {generated_at}"]
         for title in SECTION_ORDER:
+            if title == "REFERENCE":
+                blocks.append(f"## {title}\n\n{cls._reference_markdown_block(references)}")
+                continue
             prefix = "#" if title in {"SUMMARY", "REFERENCE"} else "##"
             blocks.append(f"{prefix} {title}\n\n{sections.get(title, '').strip()}")
         return "\n\n".join(blocks).strip() + "\n"
@@ -90,21 +189,22 @@ class WriterAgent:
     @staticmethod
     def _fallback_sections(global_state: GlobalState) -> dict[str, str]:
         comparison_lines: list[str] = []
-        for row in global_state.get("comparison_matrix", []):
-            axis = row.get("axis", "")
+        rows_by_axis = {row.get("axis", ""): row for row in global_state.get("comparison_matrix", [])}
+        for axis in COMPARISON_AXES:
+            row = rows_by_axis.get(axis, {})
+            axis_label = AXIS_LABELS.get(axis, axis)
             comparison_lines.append(
-                f"- **{axis}**: LGES={row.get('lges_summary', '')} / CATL={row.get('catl_summary', '')} / 차이={row.get('difference', '')}"
+                f"- **{axis_label}**: LGES={row.get('lges_summary', '근거 부족')} / CATL={row.get('catl_summary', '근거 부족')} / 차이={row.get('difference', '근거 부족')}"
             )
 
         references = "\n".join(f"- {item}" for item in global_state.get("references", []))
         return {
             "SUMMARY": (
-                "전기차 수요 둔화와 정책 불확실성이 이어지는 환경에서도 LGES와 CATL은 모두 EV 외 수요처 확대를 통해 "
-                "포트폴리오 리스크를 낮추고 새로운 성장 동력을 확보하려는 공통된 방향을 보이고 있다. LGES는 기술, "
-                "ESS, 생산 유연성과 같은 질적 경쟁력에 상대적으로 무게를 두는 반면, CATL은 생산능력, 제품군 확장, "
-                "비용 경쟁력과 같은 양적 우위를 바탕으로 대응하는 차이가 나타난다.\n\n"
-                "결과적으로 두 기업 모두 EV 외 응용처와 생태계 확장을 핵심 성장 축으로 삼고 있지만, 향후 성과는 "
-                "정책 변화, 수요 회복 속도, ESS 및 재활용 사업의 실질적 수익화 여부에 따라 갈릴 가능성이 높다."
+                "확보된 근거 범위에서는 LGES와 CATL 모두 전기차 수요 둔화에 대응해 비EV 수요처와 에너지저장 영역을 "
+                "함께 검토하고 있는 것으로 보인다. 다만 기업별 세부 전략의 공개 수준과 근거 밀도에는 차이가 있어, "
+                "일부 비교는 제한적으로 해석할 필요가 있다.\n\n"
+                "현재 자료만으로는 한쪽의 우위를 단정하기보다, LGES는 기술·포트폴리오 측면, CATL은 생산·상용화 측면에서 "
+                "각기 다른 강조점을 보인다는 수준의 정리가 더 적절하다."
             ),
             "1. 시장 배경": global_state.get("market_context", {}).get("summary", ""),
             "2. LGES 전략": global_state.get("company_results", {})
@@ -120,13 +220,59 @@ class WriterAgent:
             "4. 전략 비교": "\n".join(comparison_lines),
             "5. SWOT 분석": "SWOT은 내부 강점/약점과 외부 기회/위협을 구분해 정리한다.",
             "6. 종합 시사점": (
-                "향후 경쟁력은 EV 외 수요처 확대, 공급망 안정성, 재활용 및 ESS 확장 역량에서 갈릴 가능성이 높다."
+                "현재 공개 근거 기준으로는 EV 외 수요처 확대, ESS 대응, 공급망 및 원가 구조 대응이 향후 경쟁력에 영향을 줄 가능성이 있다. "
+                "다만 개별 회사의 중장기 전략 효과는 추가 공시와 실행 결과 확인이 필요하다."
             ),
             "REFERENCE": references,
         }
 
     @classmethod
-    def _build_html_report(cls, global_state: GlobalState, generated_at: str) -> str:
+    def _build_reference_catalog(
+        cls,
+        global_state: GlobalState,
+    ) -> tuple[list[str], dict[str, int]]:
+        references: list[str] = []
+        index_by_key: dict[str, int] = {}
+
+        def normalize(value: str) -> str:
+            return cls._clean_text(value).lower()
+
+        def register(reference: str) -> None:
+            normalized = normalize(reference)
+            if not normalized or normalized in index_by_key:
+                return
+            index_by_key[normalized] = len(references) + 1
+            references.append(reference)
+
+        for item in (
+            global_state.get("market_context", {}).get("normalized_evidence", [])
+            + global_state.get("company_results", {}).get("LGES", {}).get("normalized_evidence", [])
+            + global_state.get("company_results", {}).get("CATL", {}).get("normalized_evidence", [])
+        ):
+            reference = cls._format_evidence_source(item)
+            if reference:
+                register(reference)
+
+        for reference in global_state.get("references", []):
+            register(reference)
+
+        return references, index_by_key
+
+    @classmethod
+    def _reference_markdown_block(cls, references: list[str]) -> str:
+        if not references:
+            return "참고문헌 없음"
+        return "\n".join(f"{idx + 1}. {item}" for idx, item in enumerate(references))
+
+    @classmethod
+    def _build_html_report(
+        cls,
+        global_state: GlobalState,
+        generated_at: str,
+        *,
+        references: list[str],
+        reference_index: dict[str, int],
+    ) -> str:
         sections = global_state["draft_sections"]
         summary_html = cls._markdown_to_html(sections.get("SUMMARY", ""))
         market_html = cls._markdown_to_html(sections.get("1. 시장 배경", ""))
@@ -134,25 +280,31 @@ class WriterAgent:
         catl_html = cls._markdown_to_html(sections.get("3. CATL 전략", ""))
         comparison_html = cls._markdown_to_html(sections.get("4. 전략 비교", ""))
         implication_html = cls._markdown_to_html(sections.get("6. 종합 시사점", ""))
-        reference_html = cls._reference_html(global_state.get("references", []))
+        reference_html = cls._reference_html(references)
         swot_html = cls._swot_html(global_state.get("swot", {}))
 
         market_refs = cls._evidence_panel(
             "주요 근거",
             global_state.get("market_context", {}).get("normalized_evidence", []),
             limit=4,
+            reference_index=reference_index,
         )
         lges_refs = cls._evidence_panel(
             "주요 근거",
             global_state.get("company_results", {}).get("LGES", {}).get("normalized_evidence", []),
             limit=4,
+            reference_index=reference_index,
         )
         catl_refs = cls._evidence_panel(
             "주요 근거",
             global_state.get("company_results", {}).get("CATL", {}).get("normalized_evidence", []),
             limit=4,
+            reference_index=reference_index,
         )
-        comparison_refs = cls._comparison_evidence_panel(global_state)
+        comparison_refs = cls._comparison_evidence_panel(
+            global_state,
+            reference_index=reference_index,
+        )
         implication_refs = cls._evidence_panel(
             "참고 근거",
             [
@@ -161,6 +313,7 @@ class WriterAgent:
                 *global_state.get("company_results", {}).get("CATL", {}).get("normalized_evidence", [])[:2],
             ],
             limit=6,
+            reference_index=reference_index,
         )
 
         title = escape(global_state.get("goal", "배터리 시장 전략 비교 보고서"))
@@ -249,19 +402,27 @@ class WriterAgent:
             return "\n".join(f"<p>{escape(part)}</p>" for part in paragraphs)
 
     @classmethod
-    def _evidence_panel(cls, title: str, evidence: list[dict[str, Any]], *, limit: int) -> str:
+    def _evidence_panel(
+        cls,
+        title: str,
+        evidence: list[dict[str, Any]],
+        *,
+        limit: int,
+        reference_index: dict[str, int],
+    ) -> str:
         rows: list[str] = []
         for item in evidence[:limit]:
-            claim = cls._clean_text(str(item.get("claim", "")))
+            claim = cls._display_claim(item)
             if not claim:
                 continue
-            source_label = cls._format_evidence_source(item)
-            if not source_label:
+            cite_indices = cls._format_evidence_citation_numbers(item, reference_index)
+            if not cite_indices:
                 continue
+            cites = "".join(f"<sup><a href=\"#reference-{idx}\" class=\"footnote-link\">[{idx}]</a></sup>" for idx in cite_indices)
             rows.append(
-                "<li><span class=\"evidence-claim\">{claim}</span><span class=\"evidence-cite\">출처: {cite}</span></li>".format(
+                "<li><span class=\"evidence-claim\">{claim}</span>{cites}</li>".format(
                     claim=escape(claim[:220]),
-                    cite=escape(source_label),
+                    cites=cites,
                 )
             )
         if not rows:
@@ -276,12 +437,35 @@ class WriterAgent:
 """
 
     @classmethod
-    def _comparison_evidence_panel(cls, global_state: GlobalState) -> str:
+    def _display_claim(cls, item: dict[str, Any]) -> str:
+        claim = cls._clean_text(str(item.get("claim", "")))
+        if not claim:
+            return ""
+        has_hangul = re.search(r"[가-힣]", claim) is not None
+        has_non_korean = re.search(r"[A-Za-z\u4e00-\u9fff]", claim) is not None
+        if has_non_korean and not has_hangul:
+            source_title = cls._clean_text(str(item.get("source_title") or ""))
+            metric_name = cls._clean_text(str(item.get("metric_name") or ""))
+            parts = ["원문 근거는 한국어 요약 기준으로 정리됨"]
+            if source_title:
+                parts.append(source_title)
+            if metric_name:
+                parts.append(metric_name)
+            return " | ".join(parts)
+        return claim
+
+    @classmethod
+    def _comparison_evidence_panel(
+        cls,
+        global_state: GlobalState,
+        *,
+        reference_index: dict[str, int],
+    ) -> str:
         items = [
             *global_state.get("company_results", {}).get("LGES", {}).get("normalized_evidence", [])[:3],
             *global_state.get("company_results", {}).get("CATL", {}).get("normalized_evidence", [])[:3],
         ]
-        return cls._evidence_panel("비교 근거", items, limit=6)
+        return cls._evidence_panel("비교 근거", items, limit=6, reference_index=reference_index)
 
     @classmethod
     def _swot_html(cls, swot: dict[str, Any]) -> str:
@@ -324,8 +508,26 @@ class WriterAgent:
     def _reference_html(references: list[str]) -> str:
         if not references:
             return "<p>참고문헌 없음</p>"
-        rows = "".join(f"<li>{escape(item)}</li>" for item in references)
+        rows = "".join(
+            f"<li id=\"reference-{idx}\"><span class=\"reference-index\">[{idx}]</span> {escape(item)}</li>"
+            for idx, item in enumerate(references, start=1)
+        )
         return f"<ol class=\"reference-list\">{rows}</ol>"
+
+    @classmethod
+    def _format_evidence_citation_numbers(
+        cls,
+        item: dict[str, Any],
+        reference_index: dict[str, int],
+    ) -> list[int]:
+        source_label = cls._format_evidence_source(item)
+        if not source_label:
+            return []
+        normalized = cls._clean_text(source_label).lower()
+        index = reference_index.get(normalized)
+        if not index:
+            return []
+        return [index]
 
     @classmethod
     def _format_evidence_source(cls, item: dict[str, Any]) -> str:
@@ -345,9 +547,12 @@ class WriterAgent:
             else:
                 parts = [source_marker]
         else:
-            if not source_title:
+            if source_title:
+                parts = [source_title]
+            elif source_marker:
+                parts = [source_marker]
+            else:
                 return ""
-            parts = [source_title]
             if source_marker:
                 parts.append(source_marker)
 
@@ -700,10 +905,15 @@ tr:nth-child(even) td {
   display: block;
 }
 
-.evidence-cite {
-  display: block;
+.footnote-link {
   color: #7c6b57;
-  margin-top: 2px;
+  text-decoration: none;
+  font-size: 8.8pt;
+  margin-left: 4px;
+}
+
+.footnote-link:hover {
+  text-decoration: underline;
 }
 
 .swot-company + .swot-company {
@@ -739,5 +949,11 @@ tr:nth-child(even) td {
 .reference-list {
   margin: 0;
   padding-left: 20px;
+  line-height: 1.5;
+}
+
+.reference-index {
+  color: var(--navy);
+  font-weight: 700;
 }
 """

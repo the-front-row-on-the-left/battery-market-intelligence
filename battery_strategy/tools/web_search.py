@@ -60,33 +60,40 @@ class DuckDuckGoSearcher(BaseSearcher):
         hits: list[SearchHit] = []
         for annotated_query in queries:
             label, query = parse_annotated_query(annotated_query)
-            with self._ddgs_cls() as ddgs:
-                for item in ddgs.text(
-                    query,
-                    region=self.region,
-                    safesearch="moderate",
-                    max_results=self.max_results_per_query,
-                ):
-                    url = item.get("href", "")
-                    snippet = item.get("body", "")
-                    content = snippet
-                    if self.fetch_full_text and url:
-                        fetched = self._fetch_full_text(url)
-                        if fetched:
-                            content = fetched
-                    hits.append(
-                        {
-                            "query": query,
-                            "query_label": label,  # type: ignore[typeddict-item]
-                            "title": item.get("title", ""),
-                            "url": url,
-                            "snippet": snippet,
-                            "content": content,
-                            "source_type": infer_source_type(url),  # type: ignore[typeddict-item]
-                            "domain": domain_from_url(url),
-                            "searched_at": utc_today(),
-                        }
+            try:
+                with self._ddgs_cls() as ddgs:
+                    results = ddgs.text(
+                        query,
+                        region=self.region,
+                        safesearch="moderate",
+                        max_results=self.max_results_per_query,
                     )
+                    for item in results:
+                        url = item.get("href", "")
+                        snippet = item.get("body", "")
+                        content = snippet
+                        if self.fetch_full_text and url:
+                            fetched = self._fetch_full_text(url)
+                            if fetched:
+                                content = fetched
+                        hits.append(
+                            {
+                                "query": query,
+                                "query_label": label,  # type: ignore[typeddict-item]
+                                "title": item.get("title", ""),
+                                "url": url,
+                                "snippet": snippet,
+                                "content": content,
+                                "source_type": infer_source_type(url),  # type: ignore[typeddict-item]
+                                "domain": domain_from_url(url),
+                                "searched_at": utc_today(),
+                            }
+                        )
+            except Exception:
+                # Search providers can raise when a query is too narrow or yields no
+                # results. Treat that as an empty web result so the pipeline can
+                # continue with RAG evidence and any other successful queries.
+                continue
         return hits
 
     @staticmethod
