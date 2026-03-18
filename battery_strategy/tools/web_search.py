@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 from battery_strategy.utils.common import domain_from_url, parse_annotated_query, utc_today
 from battery_strategy.utils.types import SearchHit, SourceType
@@ -43,14 +44,16 @@ class DuckDuckGoSearcher(BaseSearcher):
     max_results_per_query: int = 5
     fetch_full_text: bool = True
     enabled: bool = True
+    _ddgs_cls: Any = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         try:
-            from duckduckgo_search import DDGS
+            from ddgs import DDGS
         except Exception as exc:  # noqa: BLE001
-            raise RuntimeError(
-                "duckduckgo-search package is required for DuckDuckGoSearcher."
-            ) from exc
+            try:
+                from duckduckgo_search import DDGS
+            except Exception:
+                raise RuntimeError("ddgs package is required for DuckDuckGoSearcher.") from exc
         self._ddgs_cls = DDGS
 
     def search_many(self, queries: Iterable[str]) -> list[SearchHit]:

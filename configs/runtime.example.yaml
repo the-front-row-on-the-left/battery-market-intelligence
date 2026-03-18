@@ -9,6 +9,8 @@ llm:
 retrieval:
   embedding_model: BAAI/bge-m3
   reranker_model: BAAI/bge-reranker-v2-m3
+  embedding_batch_size: 4
+  embedding_max_seq_length: 512
   chunk_size_tokens: 900
   chunk_overlap_tokens: 120
   dense_top_k: 8

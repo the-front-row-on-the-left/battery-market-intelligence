@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
+import httpx
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -36,6 +38,26 @@ class MockLLM(BaseLLM):
         return LLMResponse(text='{"summary": "mock output"}')
 
 
+def normalize_openai_base_url(base_url: str | None) -> str | None:
+    if base_url is None:
+        return None
+
+    cleaned = base_url.strip().strip("\"'")
+    if not cleaned:
+        return None
+
+    parsed = urlparse(cleaned)
+    if parsed.scheme in {"http", "https"}:
+        return cleaned
+
+    if "://" in cleaned:
+        raise LLMError(f"Invalid OPENAI_BASE_URL: {cleaned}")
+
+    if cleaned.startswith(("localhost", "127.0.0.1")):
+        return f"http://{cleaned}"
+    return f"https://{cleaned}"
+
+
 class OpenAIResponsesLLM(BaseLLM):
     def __init__(
         self,
@@ -46,17 +68,27 @@ class OpenAIResponsesLLM(BaseLLM):
         api_key: str | None = None,
         base_url: str | None = None,
     ) -> None:
+        resolved_base_url = normalize_openai_base_url(base_url or os.getenv("OPENAI_BASE_URL"))
+        if resolved_base_url is None:
+            resolved_base_url = "https://api.openai.com/v1"
+
         self.model = model
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self.base_url = base_url or os.getenv("OPENAI_BASE_URL") or None
+        self.base_url = resolved_base_url
         if not self.api_key:
             raise LLMError("OPENAI_API_KEY is not set.")
 
         from openai import OpenAI
 
-        self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        # Ignore malformed proxy-related env vars from the shell unless the app
+        # explicitly passes a proxy-aware client.
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            http_client=httpx.Client(trust_env=False, base_url=self.base_url),
+        )
 
     @retry(wait=wait_exponential(multiplier=1, min=1, max=8), stop=stop_after_attempt(3))
     def text(self, instructions: str, input_text: str) -> LLMResponse:

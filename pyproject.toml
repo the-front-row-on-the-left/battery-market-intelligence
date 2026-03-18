@@ -5,7 +5,7 @@ description = "Supervisor-based multi-agent battery strategy analysis pipeline f
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
-  "duckduckgo-search>=6.3.0",
+  "ddgs>=9.0.0",
   "faiss-cpu>=1.8.0",
   "httpx>=0.27.0",
   "numpy>=1.26.0",

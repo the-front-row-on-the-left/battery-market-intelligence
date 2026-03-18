@@ -39,7 +39,11 @@ def build_index(
         target_tokens=config.retrieval.chunk_size_tokens,
         overlap_tokens=config.retrieval.chunk_overlap_tokens,
     )
-    embedder = LocalEmbedder(config.retrieval.embedding_model)
+    embedder = LocalEmbedder(
+        config.retrieval.embedding_model,
+        batch_size=config.retrieval.embedding_batch_size,
+        max_seq_length=config.retrieval.embedding_max_seq_length,
+    )
 
     all_chunks: list[ChunkRecord] = []
     for source in sources:
