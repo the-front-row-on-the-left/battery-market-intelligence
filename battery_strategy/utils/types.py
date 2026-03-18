@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal, NotRequired, TypedDict
+from typing import Annotated, Any, Literal, NotRequired, TypedDict
 
 Axis = Literal[
     "portfolio",
@@ -160,6 +160,19 @@ class RetryPlan(TypedDict):
     query_hint: str
 
 
+def merge_company_results(
+    left: dict[CompanyName, CompanyResult],
+    right: dict[CompanyName, CompanyResult],
+) -> dict[CompanyName, CompanyResult]:
+    merged = dict(left or {})
+    merged.update(right or {})
+    return merged
+
+
+def merge_unique_strings(left: list[str], right: list[str]) -> list[str]:
+    return list(dict.fromkeys([*(left or []), *(right or [])]))
+
+
 class GlobalState(TypedDict):
     goal: str
     criteria: list[str]
@@ -167,16 +180,18 @@ class GlobalState(TypedDict):
     corpus_manifest: list[SourceManifestItem]
     query_plan: dict[str, list[str]]
     market_context: MarketContext
-    company_results: dict[CompanyName, CompanyResult]
+    company_results: Annotated[dict[CompanyName, CompanyResult], merge_company_results]
     comparison_matrix: list[ComparisonRow]
     swot: dict[str, dict[str, list[str]]]
     bias_flags: list[str]
-    unresolved_conflicts: list[str]
+    unresolved_conflicts: Annotated[list[str], merge_unique_strings]
     retry_plan: RetryPlan | None
     next_step: str
     status: str
     draft_sections: dict[str, str]
     references: list[str]
+    retry_count: int
+    retry_history: Annotated[list[str], merge_unique_strings]
 
 
 class MarketState(TypedDict):

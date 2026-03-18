@@ -78,6 +78,8 @@ class PipelineFactory:
             "status": "initialized",
             "draft_sections": {},
             "references": [],
+            "retry_count": 0,
+            "retry_history": [],
         }
 
     def run(self, goal: str) -> GlobalState:

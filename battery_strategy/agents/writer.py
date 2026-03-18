@@ -128,31 +128,46 @@ class WriterAgent:
     @classmethod
     def _build_html_report(cls, global_state: GlobalState, generated_at: str) -> str:
         sections = global_state["draft_sections"]
+        bibliography = cls._build_bibliography(global_state)
         summary_html = cls._markdown_to_html(sections.get("SUMMARY", ""))
         market_html = cls._markdown_to_html(sections.get("1. 시장 배경", ""))
         lges_html = cls._markdown_to_html(sections.get("2. LGES 전략", ""))
         catl_html = cls._markdown_to_html(sections.get("3. CATL 전략", ""))
-        comparison_html = cls._markdown_to_html(sections.get("4. 전략 비교", ""))
+        comparison_html = cls._comparison_section_html(
+            global_state.get("comparison_matrix", []),
+            sections.get("4. 전략 비교", ""),
+        )
         implication_html = cls._markdown_to_html(sections.get("6. 종합 시사점", ""))
-        reference_html = cls._reference_html(global_state.get("references", []))
+        reference_html = cls._reference_html(bibliography)
         swot_html = cls._swot_html(global_state.get("swot", {}))
 
         market_refs = cls._evidence_panel(
             "주요 근거",
             global_state.get("market_context", {}).get("normalized_evidence", []),
+            bibliography,
             limit=4,
         )
         lges_refs = cls._evidence_panel(
             "주요 근거",
             global_state.get("company_results", {}).get("LGES", {}).get("normalized_evidence", []),
+            bibliography,
             limit=4,
         )
         catl_refs = cls._evidence_panel(
             "주요 근거",
             global_state.get("company_results", {}).get("CATL", {}).get("normalized_evidence", []),
+            bibliography,
             limit=4,
         )
-        comparison_refs = cls._comparison_evidence_panel(global_state)
+        comparison_refs = cls._evidence_panel(
+            "비교 근거",
+            [
+                *global_state.get("company_results", {}).get("LGES", {}).get("normalized_evidence", [])[:3],
+                *global_state.get("company_results", {}).get("CATL", {}).get("normalized_evidence", [])[:3],
+            ],
+            bibliography,
+            limit=6,
+        )
         implication_refs = cls._evidence_panel(
             "참고 근거",
             [
@@ -160,6 +175,7 @@ class WriterAgent:
                 *global_state.get("company_results", {}).get("LGES", {}).get("normalized_evidence", [])[:2],
                 *global_state.get("company_results", {}).get("CATL", {}).get("normalized_evidence", [])[:2],
             ],
+            bibliography,
             limit=6,
         )
 
@@ -249,21 +265,78 @@ class WriterAgent:
             return "\n".join(f"<p>{escape(part)}</p>" for part in paragraphs)
 
     @classmethod
-    def _evidence_panel(cls, title: str, evidence: list[dict[str, Any]], *, limit: int) -> str:
+    def _comparison_section_html(cls, comparison_matrix: list[dict[str, Any]], section_text: str) -> str:
+        table_html = cls._comparison_table_html(comparison_matrix)
+        prose_text = cls._strip_markdown_tables(section_text)
+        prose_html = cls._markdown_to_html(prose_text) if prose_text.strip() else ""
+        return "\n".join(part for part in [table_html, prose_html] if part)
+
+    @classmethod
+    def _comparison_table_html(cls, comparison_matrix: list[dict[str, Any]]) -> str:
+        if not comparison_matrix:
+            return ""
+        rows: list[str] = []
+        for row in comparison_matrix:
+            axis = cls._axis_label(str(row.get("axis", "")))
+            lges_summary = escape(cls._clean_text(str(row.get("lges_summary", ""))) or "자료 제한")
+            catl_summary = escape(cls._clean_text(str(row.get("catl_summary", ""))) or "자료 제한")
+            implication = escape(cls._clean_text(str(row.get("implication", ""))) or "시사점 정리 필요")
+            rows.append(
+                "<tr>"
+                f"<td>{escape(axis)}</td>"
+                f"<td>{lges_summary}</td>"
+                f"<td>{catl_summary}</td>"
+                f"<td>{implication}</td>"
+                "</tr>"
+            )
+        return (
+            "<table><thead><tr>"
+            "<th>구분</th><th>LGES 전략</th><th>CATL 전략</th><th>시사점</th>"
+            "</tr></thead><tbody>"
+            + "".join(rows)
+            + "</tbody></table>"
+        )
+
+    @staticmethod
+    def _strip_markdown_tables(text: str) -> str:
+        lines = text.splitlines()
+        kept: list[str] = []
+        in_table = False
+        for line in lines:
+            stripped = line.strip()
+            is_table_line = stripped.startswith("|") and stripped.endswith("|")
+            is_separator = bool(re.fullmatch(r"\|?[\s:\-|\|]+\|?", stripped))
+            if is_table_line or is_separator:
+                in_table = True
+                continue
+            if in_table and not stripped:
+                in_table = False
+                continue
+            kept.append(line)
+        return "\n".join(kept).strip()
+
+    @classmethod
+    def _evidence_panel(
+        cls,
+        title: str,
+        evidence: list[dict[str, Any]],
+        bibliography: list[dict[str, Any]],
+        *,
+        limit: int,
+    ) -> str:
+        number_by_label = {
+            cls._clean_text(str(item.get("label", ""))): int(item.get("number", 0))
+            for item in bibliography
+        }
         rows: list[str] = []
         for item in evidence[:limit]:
             claim = cls._clean_text(str(item.get("claim", "")))
             if not claim:
                 continue
             source_label = cls._format_evidence_source(item)
-            if not source_label:
-                continue
-            rows.append(
-                "<li><span class=\"evidence-claim\">{claim}</span><span class=\"evidence-cite\">출처: {cite}</span></li>".format(
-                    claim=escape(claim[:220]),
-                    cite=escape(source_label),
-                )
-            )
+            number = number_by_label.get(cls._clean_text(source_label))
+            suffix = f" <span class=\"evidence-index\">[{number}]</span>" if number else ""
+            rows.append(f"<li>{escape(claim[:220])}{suffix}</li>")
         if not rows:
             return ""
         return f"""
@@ -274,14 +347,6 @@ class WriterAgent:
   </ul>
 </div>
 """
-
-    @classmethod
-    def _comparison_evidence_panel(cls, global_state: GlobalState) -> str:
-        items = [
-            *global_state.get("company_results", {}).get("LGES", {}).get("normalized_evidence", [])[:3],
-            *global_state.get("company_results", {}).get("CATL", {}).get("normalized_evidence", [])[:3],
-        ]
-        return cls._evidence_panel("비교 근거", items, limit=6)
 
     @classmethod
     def _swot_html(cls, swot: dict[str, Any]) -> str:
@@ -321,11 +386,64 @@ class WriterAgent:
 """
 
     @staticmethod
-    def _reference_html(references: list[str]) -> str:
+    def _reference_html(references: list[dict[str, Any]]) -> str:
         if not references:
             return "<p>참고문헌 없음</p>"
-        rows = "".join(f"<li>{escape(item)}</li>" for item in references)
+        rows = "".join(
+            f"<li><span class=\"ref-index\">[{int(item['number'])}]</span> {escape(WriterAgent._compact_reference_label(str(item['label'])))}</li>"
+            for item in references
+        )
         return f"<ol class=\"reference-list\">{rows}</ol>"
+
+    @classmethod
+    def _build_bibliography(cls, global_state: GlobalState) -> list[dict[str, Any]]:
+        ordered: list[dict[str, Any]] = []
+        seen: dict[str, int] = {}
+
+        def register(label: str) -> None:
+            cleaned = cls._clean_text(label)
+            if not cleaned or cleaned in seen:
+                return
+            seen[cleaned] = len(ordered) + 1
+            ordered.append({"number": len(ordered) + 1, "label": cleaned})
+
+        for item in global_state.get("references", []):
+            register(str(item))
+
+        market_evidence = global_state.get("market_context", {}).get("normalized_evidence", [])
+        company_results = global_state.get("company_results", {})
+        company_evidence = []
+        for company_result in company_results.values():
+            company_evidence.extend(company_result.get("normalized_evidence", []))
+
+        for evidence in [*market_evidence, *company_evidence]:
+            source_label = cls._format_evidence_source(evidence)
+            if source_label:
+                register(source_label)
+
+        return ordered
+
+    @classmethod
+    def _citation_numbers_for_evidence(
+        cls,
+        evidence: list[dict[str, Any]],
+        bibliography: list[dict[str, Any]],
+        *,
+        limit: int,
+    ) -> list[int]:
+        number_by_label = {
+            cls._clean_text(str(item.get("label", ""))): int(item.get("number", 0))
+            for item in bibliography
+        }
+        numbers: list[int] = []
+        for item in evidence[:limit]:
+            source_label = cls._format_evidence_source(item)
+            if not source_label:
+                continue
+            number = number_by_label.get(cls._clean_text(source_label))
+            if number and number not in numbers:
+                numbers.append(number)
+        return numbers
 
     @classmethod
     def _format_evidence_source(cls, item: dict[str, Any]) -> str:
@@ -354,6 +472,30 @@ class WriterAgent:
         if date:
             parts.append(date)
         return " | ".join(part for part in parts if part)
+
+    @staticmethod
+    def _compact_reference_label(label: str) -> str:
+        parts = [part.strip() for part in label.split("|") if part.strip()]
+        if not parts:
+            return label
+        if len(parts) == 1:
+            return parts[0]
+        if parts[-1].startswith("20"):
+            return " | ".join([parts[0], parts[-1]])
+        return parts[0]
+
+    @staticmethod
+    def _axis_label(axis: str) -> str:
+        labels = {
+            "portfolio": "포트폴리오",
+            "commercialization": "상용화",
+            "manufacturing": "생산",
+            "technology": "기술",
+            "ecosystem": "생태계",
+            "risk": "리스크",
+            "strategy_horizon": "중장기 전략",
+        }
+        return labels.get(axis, axis)
 
     @staticmethod
     def _write_pdf_from_html(html_path: Path, pdf_path: Path) -> None:
@@ -696,14 +838,9 @@ tr:nth-child(even) td {
   margin-top: 6px;
 }
 
-.evidence-claim {
-  display: block;
-}
-
-.evidence-cite {
-  display: block;
-  color: #7c6b57;
-  margin-top: 2px;
+.evidence-index {
+  color: var(--navy);
+  font-weight: 700;
 }
 
 .swot-company + .swot-company {
@@ -739,5 +876,14 @@ tr:nth-child(even) td {
 .reference-list {
   margin: 0;
   padding-left: 20px;
+}
+
+.reference-list li + li {
+  margin-top: 8px;
+}
+
+.ref-index {
+  color: var(--navy);
+  font-weight: 700;
 }
 """

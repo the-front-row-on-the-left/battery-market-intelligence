@@ -225,6 +225,8 @@ def bias_audit_prompt(global_state: dict[str, Any]) -> tuple[str, str]:
 You are a bias audit agent for a battery strategy report.
 Review the current state and detect missing axes, source skew, overly positive evidence, outdated evidence, or unresolved conflicts.
 If retry is needed, recommend ONE retry target only.
+Do not recommend the same retry target repeatedly if it has already been attempted and there is no clear new retrieval angle.
+Prefer a different axis or stop retrying when repeated retries are unlikely to improve quality.
 {COMMON_JSON_RULES}
 """.strip()
     schema = {

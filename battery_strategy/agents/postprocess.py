@@ -17,6 +17,32 @@ from battery_strategy.utils.types import (
 from battery_strategy.utils.common import domain_from_url, utc_today
 
 
+def _clean_claim_text(text: str) -> str:
+    cleaned = " ".join((text or "").replace("\u00a0", " ").split())
+    if not cleaned:
+        return ""
+    for separator in (". ", "。", "\n"):
+        if separator in cleaned:
+            first = cleaned.split(separator, maxsplit=1)[0].strip()
+            if len(first) >= 40:
+                cleaned = first
+                break
+    return cleaned[:260].strip()
+
+
+def _select_web_claim(hit: SearchHit) -> str:
+    candidates = [
+        hit.get("snippet", ""),
+        hit.get("content", ""),
+        hit.get("title", ""),
+    ]
+    for candidate in candidates:
+        cleaned = _clean_claim_text(candidate)
+        if len(cleaned) >= 30 and "cookie" not in cleaned.lower():
+            return cleaned
+    return _clean_claim_text(hit.get("title", "")) or "웹 근거 요약을 자동 추출하지 못했습니다."
+
+
 
 def infer_axis(text: str) -> Axis:
     lowered = text.lower()
@@ -28,12 +54,13 @@ def infer_axis(text: str) -> Axis:
 
 
 def to_evidence_from_rag(company: str, hit: RetrievedChunk) -> EvidenceItem:
+    claim = _clean_claim_text(hit["text"]) or hit["text"][:180].replace("\n", " ").strip()
     return {
         "company": company,  # type: ignore[typeddict-item]
         "axis": infer_axis(hit["text"]),
         "io_type": "external" if company == "MARKET" else "internal",
         "stance": hit["query_label"],
-        "claim": hit["text"][:300].replace("\n", " "),
+        "claim": claim,
         "metric_name": "",
         "value": None,
         "unit": "",
@@ -51,12 +78,13 @@ def to_evidence_from_rag(company: str, hit: RetrievedChunk) -> EvidenceItem:
 
 
 def to_evidence_from_web(company: str, hit: SearchHit) -> EvidenceItem:
+    claim = _select_web_claim(hit)
     return {
         "company": company,  # type: ignore[typeddict-item]
         "axis": infer_axis(hit.get("content") or hit.get("snippet") or hit["title"]),
         "io_type": "external",
         "stance": hit["query_label"],
-        "claim": (hit.get("content") or hit.get("snippet") or hit["title"])[:300].replace("\n", " "),
+        "claim": claim,
         "metric_name": "",
         "value": None,
         "unit": "",

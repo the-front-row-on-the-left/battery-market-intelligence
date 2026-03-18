@@ -31,11 +31,45 @@ class BiasAuditAgent:
             },
         )
         parsed_flags = parsed.get("bias_flags", flags)
-        parsed_recommendation = parsed.get("retry_recommendation", recommendation)
+        parsed_recommendation = self._validated_recommendation(
+            global_state,
+            parsed.get("retry_recommendation", recommendation),
+            fallback=recommendation,
+        )
         return BiasAuditResult(
             bias_flags=parsed_flags,
             retry_recommendation=parsed_recommendation,
         )
+
+    @staticmethod
+    def _retry_signature(plan: RetryPlan) -> str:
+        return "::".join(
+            [
+                str(plan.get("target_scope") or "-"),
+                str(plan.get("target_company") or "-"),
+                str(plan.get("target_axis") or "-"),
+                str(plan.get("retry_from") or "-"),
+            ]
+        )
+
+    @classmethod
+    def _validated_recommendation(
+        cls,
+        global_state: GlobalState,
+        recommendation: RetryPlan | None,
+        *,
+        fallback: RetryPlan | None,
+    ) -> RetryPlan | None:
+        retry_history = set(global_state.get("retry_history", []))
+        if recommendation is not None:
+            signature = cls._retry_signature(recommendation)
+            if signature not in retry_history:
+                return recommendation
+        if fallback is not None:
+            signature = cls._retry_signature(fallback)
+            if signature not in retry_history:
+                return fallback
+        return None
 
     @staticmethod
     def _deterministic_flags(global_state: GlobalState) -> list[str]:
@@ -64,20 +98,24 @@ class BiasAuditAgent:
     ) -> RetryPlan | None:
         if not flags:
             return None
+        retry_history = set(global_state.get("retry_history", []))
         for flag in flags:
             if flag.startswith("missing_axis::"):
                 _, company, axes = flag.split("::", maxsplit=2)
-                axis = axes.split(",", maxsplit=1)[0]
-                return {
-                    "target_scope": "company",
-                    "target_company": company,  # type: ignore[typeddict-item]
-                    "target_axis": axis,  # type: ignore[typeddict-item]
-                    "retry_from": "query",
-                    "reason": "근거 부족",
-                    "query_hint": f"Focus on {axis} evidence with numeric metrics and external validation.",
-                }
+                candidate_axes = [axis for axis in axes.split(",") if axis]
+                for axis in candidate_axes:
+                    recommendation: RetryPlan = {
+                        "target_scope": "company",
+                        "target_company": company,  # type: ignore[typeddict-item]
+                        "target_axis": axis,  # type: ignore[typeddict-item]
+                        "retry_from": "query",
+                        "reason": "근거 부족",
+                        "query_hint": f"Focus on {axis} evidence with numeric metrics and external validation.",
+                    }
+                    if BiasAuditAgent._retry_signature(recommendation) not in retry_history:
+                        return recommendation
         if "missing_comparison_matrix" in flags:
-            return {
+            recommendation = {
                 "target_scope": "comparison",
                 "target_company": None,
                 "target_axis": None,
@@ -85,8 +123,10 @@ class BiasAuditAgent:
                 "reason": "비교 결과 누락",
                 "query_hint": "Rebuild comparison matrix using existing company profiles.",
             }
+            if BiasAuditAgent._retry_signature(recommendation) not in retry_history:
+                return recommendation
         if "unresolved_conflicts" in flags:
-            return {
+            recommendation = {
                 "target_scope": "comparison",
                 "target_company": None,
                 "target_axis": None,
@@ -94,4 +134,6 @@ class BiasAuditAgent:
                 "reason": "충돌",
                 "query_hint": "Surface conflicting metrics and keep both values with basis labels.",
             }
+            if BiasAuditAgent._retry_signature(recommendation) not in retry_history:
+                return recommendation
         return None
